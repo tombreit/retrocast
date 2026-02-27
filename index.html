@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="RetroCast – Compare weather forecasts with actual observations for the last 3 days">
+  <title>RetroCast – Forecast vs Reality</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Icons (Lucide – lightweight SVG icon set) -->
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js" defer></script>
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="styles/main.css">
+
+  <!-- Favicon (inline SVG data URI) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌤</text></svg>">
+</head>
+<body>
+  <div class="app">
+    <!-- ── Header ───────────────────────────────────────── -->
+    <header class="header">
+      <div class="header__inner">
+        <a class="header__brand" href="#">
+          <i data-lucide="cloud-sun" class="brand-icon"></i>
+          <span class="brand-name">RetroCast</span>
+        </a>
+
+        <div class="header__search">
+          <div class="search-box">
+            <button id="detectBtn" class="btn btn--icon" title="Detect my location">
+              <i data-lucide="locate"></i>
+            </button>
+            <input id="cityInput" class="search-box__input" type="text"
+                   placeholder="Search city…" autocomplete="off" spellcheck="false">
+            <button id="searchBtn" class="btn btn--icon" title="Search">
+              <i data-lucide="search"></i>
+            </button>
+            <!-- Autocomplete dropdown -->
+            <div id="searchDropdown" class="search-dropdown"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Favorites ────────────────────────────────────── -->
+    <div id="favoritesSlot" class="favorites-slot"></div>
+
+    <!-- ── Main ─────────────────────────────────────────── -->
+    <main class="main">
+      <!-- Info banner -->
+      <div id="infoBanner" class="banner">
+        <i data-lucide="info" class="banner__icon"></i>
+        <p class="banner__text">
+          RetroCast compares what the weather forecast <em>predicted</em> versus what <em>actually happened</em> over the last 3 days. Search for a city or detect your location to start.
+        </p>
+        <button id="closeBanner" class="banner__close" title="Dismiss">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <!-- Location display -->
+      <div class="location-bar">
+        <i data-lucide="map-pin" class="location-bar__icon"></i>
+        <span id="locationName" class="location-bar__name">Search a city to begin</span>
+        <button id="favToggle" class="btn btn--icon btn--fav" title="Add to favorites">
+          <i data-lucide="star"></i>
+        </button>
+      </div>
+
+      <!-- Summary accuracy bar -->
+      <div id="summarySlot"></div>
+
+      <!-- Day cards grid -->
+      <div id="daysGrid" class="days-grid">
+        <!-- Populated by JS -->
+        <div class="placeholder">
+          <i data-lucide="cloud-sun" class="placeholder__icon"></i>
+          <p>Select a location to see forecast accuracy</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── Footer ───────────────────────────────────────── -->
+    <footer class="footer">
+      <p>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> · No API key required</p>
+    </footer>
+  </div>
+
+  <!-- App script (ES module) -->
+  <script type="module" src="scripts/app.js"></script>
+</body>
+</html>
