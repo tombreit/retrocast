@@ -1,6 +1,6 @@
 /**
  * RetroCast – UI Controller
- * Manages all DOM interactions: location search, favorites, day cards, gauges.
+ * Manages all DOM interactions: location search, favorites, arena rows, accuracy bars.
  */
 
 import { searchLocations } from './api-service.js';
@@ -18,159 +18,215 @@ function icon(name, cls = '') {
   return `<i data-lucide="${name}" class="${cls}"></i>`;
 }
 
-// Re-initialise Lucide icons (call after inserting HTML with data-lucide attributes)
 function refreshIcons() {
   if (window.lucide) window.lucide.createIcons();
 }
 
-// ── Accuracy helpers ─────────────────────────────────────────────────────────
+// ── Accuracy colour class ────────────────────────────────────────────────────
 
-function accuracyClass(rating) {
-  const map = { Excellent: 'excellent', Good: 'good', Fair: 'fair', Poor: 'poor' };
-  return map[rating] ?? 'poor';
+function accClass(pct) {
+  if (pct >= 75) return 'excellent';
+  if (pct >= 50) return 'good';
+  if (pct >= 25) return 'fair';
+  return 'poor';
 }
 
-// ── SVG ring gauge ───────────────────────────────────────────────────────────
+// ── Competitor panel renderer ────────────────────────────────────────────────
 
-function renderGauge(percentage, grade) {
-  const r = 54, c = 2 * Math.PI * r;
-  const offset = c - (percentage / 100) * c;
-  const cls = percentage >= 75 ? 'gauge-excellent'
-            : percentage >= 50 ? 'gauge-good'
-            : percentage >= 25 ? 'gauge-fair'
-            :                    'gauge-poor';
+/**
+ * Render a single competitor column (forecast / climate / random).
+ *
+ * @param {object} prediction  – day object (same shape as forecast/actual)
+ * @param {object|null} acc    – accuracy result from compareForecastToActual, or null
+ * @param {string} label       – e.g. "Forecast"
+ * @param {string} emoji       – e.g. "🎯"
+ * @param {string} modClass    – BEM modifier, e.g. "forecast"
+ */
+function renderCompetitor(prediction, acc, label, emoji, modClass) {
+  const pct    = acc?.overall.percentage ?? null;
+  const grade  = acc?.overall.score ?? '–';
+  const cls    = pct !== null ? accClass(pct) : 'poor';
+  const pctStr = pct !== null ? `${pct}%` : 'N/A';
+
+  const tempErr = acc ? `±${acc.temperature.avgError.toFixed(1)}°` : '–';
+  const rainOk  = acc
+    ? `<span class="acc-${acc.precipitation.correct ? 'excellent' : 'poor'}">${icon(acc.precipitation.correct ? 'check' : 'x')}</span>`
+    : '–';
+  const condOk  = acc
+    ? `<span class="acc-${acc.condition.match ? 'excellent' : (acc.condition.confidence === 'Medium' ? 'fair' : 'poor')}">${icon(acc.condition.match ? 'check' : 'x')}</span>`
+    : '–';
+
   return `
-    <div class="gauge">
-      <svg viewBox="0 0 120 120">
-        <circle class="gauge-bg" cx="60" cy="60" r="${r}" />
-        <circle class="gauge-fill ${cls}" cx="60" cy="60" r="${r}"
-                stroke-dasharray="${c}" stroke-dashoffset="${offset}"
-                style="--target-offset:${offset}" />
-      </svg>
-      <div class="gauge-label">
-        <span class="gauge-grade">${grade}</span>
-        <span class="gauge-pct">${percentage}%</span>
+    <div class="arena-competitor arena-competitor--${modClass}">
+      <div class="arena-competitor__heading">
+        <span class="arena-competitor__emoji">${emoji}</span> ${label}
+      </div>
+      <div class="arena-competitor__icon">${icon(prediction.weather.icon)}</div>
+      <div class="arena-competitor__condition">${prediction.weather.description}</div>
+      <div class="arena-competitor__temps">
+        <span class="temp-hi">${prediction.temperature.max.toFixed(1)}°</span>
+        <span class="temp-lo">${prediction.temperature.min.toFixed(1)}°</span>
+      </div>
+      <div class="arena-competitor__precip">
+        ${icon('droplets')} ${prediction.precipitation.sum.toFixed(1)} mm
+      </div>
+      <div class="arena-competitor__score arena-score--${cls}">
+        <div class="arena-score-bar">
+          <div class="arena-score-bar__fill arena-score-bar--${cls}"
+               style="width:${pct ?? 0}%"></div>
+        </div>
+        <span class="arena-score-grade">${grade}</span>
+        <span class="arena-score-pct">${pctStr}</span>
+      </div>
+      <div class="arena-competitor__details">
+        <span class="arena-detail" title="Temperature error">${icon('thermometer')} ${tempErr}</span>
+        <span class="arena-detail" title="Rain correct">${icon('droplets')} ${rainOk}</span>
+        <span class="arena-detail" title="Condition match">${icon('eye')} ${condOk}</span>
       </div>
     </div>`;
 }
 
-// ── Day card renderers ───────────────────────────────────────────────────────
+// ── Arena day row ────────────────────────────────────────────────────────────
 
-function renderDayCard(day, index) {
-  const { forecast: f, actual: a, accuracy: acc } = day;
-  const label = getRelativeDayLabel(day.daysAgo);
+function renderArenaDay(day, index) {
+  const { forecast: f, actual: a, accuracy: acc,
+          statistical, statAccuracy, random, randAccuracy } = day;
+
+  const label       = getRelativeDayLabel(day.daysAgo);
   const displayDate = formatDisplayDate(day.date);
 
+  // Determine best competitor to show a winner badge
+  const scores = [
+    { key: 'forecast', pct: acc.overall.percentage },
+    { key: 'climate',  pct: statAccuracy?.overall.percentage ?? -1 },
+    { key: 'random',   pct: randAccuracy.overall.percentage },
+  ];
+  const winner = scores.reduce((best, c) => c.pct > best.pct ? c : best).key;
+
+  const climatePanel = statistical
+    ? renderCompetitor(statistical, statAccuracy, 'Climate', '📊', 'climate')
+    : `<div class="arena-competitor arena-competitor--climate arena-competitor--unavailable">
+         <div class="arena-competitor__heading"><span class="arena-competitor__emoji">📊</span> Climate</div>
+         <div class="arena-competitor__na">${icon('cloud-off')} No data</div>
+       </div>`;
+
   return `
-    <article class="day-card" style="animation-delay:${index * 100}ms">
-      <header class="day-card__header">
-        <span class="day-card__label">${label}</span>
-        <time class="day-card__date">${displayDate}</time>
+    <article class="arena-day" style="animation-delay:${index * 120}ms">
+      <header class="arena-day__header">
+        <span class="arena-day__label">${label}</span>
+        <time class="arena-day__date">${displayDate}</time>
       </header>
 
-      <div class="day-card__body">
-        <!-- Forecast column -->
-        <div class="day-card__col day-card__col--forecast">
-          <div class="day-card__col-title">${icon('cloud-sun')} Forecast</div>
-          <div class="day-card__icon">${icon(f.weather.icon)}</div>
-          <div class="day-card__condition">${f.weather.description}</div>
-          <div class="day-card__temps">
-            <span class="temp-hi">${icon('thermometer')} ${f.temperature.max.toFixed(1)}°</span>
-            <span class="temp-lo">${icon('thermometer-snowflake')} ${f.temperature.min.toFixed(1)}°</span>
+      <div class="arena-day__body">
+        <!-- Ground truth -->
+        <div class="arena-actual">
+          <div class="arena-actual__heading">${icon('check-circle')} Actual</div>
+          <div class="arena-actual__icon">${icon(a.weather.icon)}</div>
+          <div class="arena-actual__condition">${a.weather.description}</div>
+          <div class="arena-actual__temps">
+            <span class="temp-hi">${a.temperature.max.toFixed(1)}°</span>
+            <span class="temp-lo">${a.temperature.min.toFixed(1)}°</span>
           </div>
-          <div class="day-card__precip">
-            ${icon('droplets')}
-            ${f.precipitation.probability != null
-              ? `${f.precipitation.probability}% chance`
-              : `${f.precipitation.sum.toFixed(1)} mm`}
-          </div>
+          <div class="arena-actual__precip">${icon('droplets')} ${a.precipitation.sum.toFixed(1)} mm</div>
         </div>
 
-        <!-- Gauge -->
-        <div class="day-card__gauge">
-          ${renderGauge(acc.overall.percentage, acc.overall.score)}
-        </div>
-
-        <!-- Actual column -->
-        <div class="day-card__col day-card__col--actual">
-          <div class="day-card__col-title">${icon('sun')} Actual</div>
-          <div class="day-card__icon">${icon(a.weather.icon)}</div>
-          <div class="day-card__condition">${a.weather.description}</div>
-          <div class="day-card__temps">
-            <span class="temp-hi">${icon('thermometer')} ${a.temperature.max.toFixed(1)}°</span>
-            <span class="temp-lo">${icon('thermometer-snowflake')} ${a.temperature.min.toFixed(1)}°</span>
+        <!-- Competitors -->
+        <div class="arena-competitors">
+          <div class="arena-competitor-wrapper ${winner === 'forecast' ? 'arena-winner' : ''}">
+            ${winner === 'forecast' ? '<div class="arena-winner-badge">🏆 Best</div>' : ''}
+            ${renderCompetitor(f, acc, 'Forecast', '🎯', 'forecast')}
           </div>
-          <div class="day-card__precip">
-            ${icon('droplets')} ${a.precipitation.sum.toFixed(1)} mm
+          <div class="arena-competitor-wrapper ${winner === 'climate' ? 'arena-winner' : ''}">
+            ${winner === 'climate' ? '<div class="arena-winner-badge">🏆 Best</div>' : ''}
+            ${climatePanel}
+          </div>
+          <div class="arena-competitor-wrapper ${winner === 'random' ? 'arena-winner' : ''}">
+            ${winner === 'random' ? '<div class="arena-winner-badge">🏆 Best</div>' : ''}
+            ${renderCompetitor(random, randAccuracy, 'Random', '🎲', 'random')}
           </div>
         </div>
-      </div>
-
-      <!-- Accuracy details -->
-      <footer class="day-card__footer">
-        <div class="day-card__stat">
-          <span class="stat-label">${icon('thermometer')} Temp</span>
-          <span class="stat-value acc-${accuracyClass(acc.temperature.rating)}">±${acc.temperature.avgError.toFixed(1)}°</span>
-        </div>
-        <div class="day-card__stat">
-          <span class="stat-label">${icon('cloud-rain')} Rain</span>
-          <span class="stat-value acc-${acc.precipitation.correct ? 'excellent' : 'poor'}">
-            ${icon(acc.precipitation.correct ? 'check' : 'x')} ${acc.precipitation.accuracy}
-          </span>
-        </div>
-        <div class="day-card__stat">
-          <span class="stat-label">${icon('eye')} Condition</span>
-          <span class="stat-value acc-${acc.condition.match ? 'excellent' : (acc.condition.confidence === 'Medium' ? 'fair' : 'poor')}">
-            ${icon(acc.condition.match ? 'check' : 'alert-triangle')} ${acc.condition.confidence}
-          </span>
-        </div>
-      </footer>
-    </article>`;
-}
-
-function renderErrorCard(day, index) {
-  const label = getRelativeDayLabel(day.daysAgo);
-  const displayDate = formatDisplayDate(day.date);
-  return `
-    <article class="day-card day-card--error" style="animation-delay:${index * 100}ms">
-      <header class="day-card__header">
-        <span class="day-card__label">${label}</span>
-        <time class="day-card__date">${displayDate}</time>
-      </header>
-      <div class="day-card__empty">
-        ${icon('cloud-off', 'empty-icon')}
-        <p>${day.error}</p>
       </div>
     </article>`;
 }
 
-function renderSkeletonCards() {
+function renderArenaErrorDay(day, index) {
+  const label       = getRelativeDayLabel(day.daysAgo);
+  const displayDate = formatDisplayDate(day.date);
+  return `
+    <article class="arena-day arena-day--error" style="animation-delay:${index * 120}ms">
+      <header class="arena-day__header">
+        <span class="arena-day__label">${label}</span>
+        <time class="arena-day__date">${displayDate}</time>
+      </header>
+      <div class="arena-day__empty">
+        ${icon('cloud-off', 'empty-icon')} <p>${day.error}</p>
+      </div>
+    </article>`;
+}
+
+function renderArenaSkeletons() {
   return Array.from({ length: 3 }, (_, i) => `
-    <article class="day-card day-card--skeleton" style="animation-delay:${i * 100}ms">
-      <header class="day-card__header"><div class="skel skel-text"></div></header>
-      <div class="day-card__body">
-        <div class="day-card__col"><div class="skel skel-circle"></div><div class="skel skel-text"></div></div>
-        <div class="day-card__gauge"><div class="skel skel-gauge"></div></div>
-        <div class="day-card__col"><div class="skel skel-circle"></div><div class="skel skel-text"></div></div>
+    <article class="arena-day arena-day--skeleton" style="animation-delay:${i * 120}ms">
+      <header class="arena-day__header">
+        <div class="skel skel-text" style="width:80px"></div>
+        <div class="skel skel-text" style="width:60px"></div>
+      </header>
+      <div class="arena-day__body">
+        <div class="arena-actual">
+          <div class="skel skel-circle"></div>
+          <div class="skel skel-text"></div>
+          <div class="skel skel-text" style="width:50%"></div>
+        </div>
+        <div class="arena-competitors">
+          ${Array.from({ length: 3 }, () => `
+            <div class="arena-competitor-wrapper">
+              <div class="arena-competitor">
+                <div class="skel skel-circle"></div>
+                <div class="skel skel-text"></div>
+                <div class="skel skel-bar" style="margin-top:auto"></div>
+              </div>
+            </div>`).join('')}
+        </div>
       </div>
-      <footer class="day-card__footer"><div class="skel skel-bar"></div></footer>
     </article>`).join('');
 }
 
-// ── Summary bar ──────────────────────────────────────────────────────────────
+// ── Arena summary (3 accuracy bars) ─────────────────────────────────────────
 
-function renderSummary(days) {
+function renderArenaSummary(days) {
   const valid = days.filter(d => d.accuracy);
   if (!valid.length) return '';
-  const avg = Math.round(valid.reduce((s, d) => s + d.accuracy.overall.percentage, 0) / valid.length);
-  const cls = avg >= 75 ? 'excellent' : avg >= 50 ? 'good' : avg >= 25 ? 'fair' : 'poor';
+
+  const avg = arr => arr.length
+    ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length)
+    : null;
+
+  const forecastAvg = avg(valid.map(d => d.accuracy.overall.percentage));
+  const climateAvg  = avg(valid.filter(d => d.statAccuracy).map(d => d.statAccuracy.overall.percentage));
+  const randomAvg   = avg(valid.map(d => d.randAccuracy.overall.percentage));
+
+  function bar(emoji, name, pct, modClass) {
+    const cls = accClass(pct ?? 0);
+    const pctStr = pct !== null ? `${pct}%` : 'N/A';
+    return `
+      <div class="arena-summary__row arena-summary__row--${modClass}">
+        <span class="arena-summary__label">
+          <span class="arena-summary__emoji">${emoji}</span>
+          <span class="arena-summary__name">${name}</span>
+        </span>
+        <div class="arena-summary__track">
+          <div class="arena-summary__fill arena-summary--${cls}" style="--pct:${pct ?? 0}%"></div>
+        </div>
+        <span class="arena-summary__value acc-${cls}">${pctStr}</span>
+      </div>`;
+  }
+
   return `
-    <div class="summary-bar">
-      <span class="summary-bar__label">3-day forecast accuracy</span>
-      <div class="summary-bar__track">
-        <div class="summary-bar__fill summary-bar--${cls}" style="--pct:${avg}%"></div>
-      </div>
-      <span class="summary-bar__value">${avg}%</span>
+    <div class="arena-summary">
+      <div class="arena-summary__title">${icon('trophy')} 3-Day Prediction Arena</div>
+      ${bar('🎯', 'Forecast',         forecastAvg, 'forecast')}
+      ${bar('📊', 'Climate Baseline', climateAvg,  'climate')}
+      ${bar('🎲', 'Random Guess',     randomAvg,   'random')}
     </div>`;
 }
 
@@ -212,14 +268,13 @@ function renderSearchResults(results) {
 export class UIController {
   constructor() {
     this.currentLocation = null;
-    this._els = {};           // cached DOM refs
-    this._searchResults = []; // latest geocoding results
+    this._els = {};
+    this._searchResults = [];
   }
 
   // ── Initialisation ─────────────────────────────────────────────────────────
 
   init() {
-    // Cache DOM elements
     const ids = [
       'cityInput', 'searchBtn', 'detectBtn', 'searchDropdown',
       'daysGrid', 'summarySlot', 'favoritesSlot',
@@ -233,11 +288,8 @@ export class UIController {
     this._initBanner();
     this._renderFavoritesBar();
 
-    // Restore last location or prompt
     const saved = getActiveLocation();
-    if (saved) {
-      this._activateLocation(saved, false);
-    }
+    if (saved) this._activateLocation(saved, false);
   }
 
   // ── Event wiring ───────────────────────────────────────────────────────────
@@ -245,47 +297,37 @@ export class UIController {
   _bindEvents() {
     const { cityInput, searchBtn, detectBtn, searchDropdown, favToggle, favoritesSlot, closeBanner: bannerBtn } = this._els;
 
-    // Search input – debounced autocomplete
     const doSearch = debounce(() => this._onSearchInput(), 350);
     cityInput.addEventListener('input', doSearch);
     cityInput.addEventListener('focus', () => {
       if (this._searchResults.length) searchDropdown.classList.add('open');
     });
-
-    // Enter key submits search
     cityInput.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); this._onSearchInput(); }
     });
 
-    // Click outside closes dropdown
     document.addEventListener('click', e => {
       if (!cityInput.contains(e.target) && !searchDropdown.contains(e.target)) {
         searchDropdown.classList.remove('open');
       }
     });
 
-    // Search dropdown delegation
     searchDropdown.addEventListener('click', e => {
       const item = e.target.closest('.search-dropdown__item');
       if (!item) return;
       this._pickSearchResult(item.dataset);
     });
 
-    // Buttons
     searchBtn.addEventListener('click', () => this._onSearchInput());
     detectBtn.addEventListener('click', () => this._detectLocation());
-
-    // Favorite toggle
     favToggle.addEventListener('click', () => this._toggleFavorite());
 
-    // Favorites bar delegation
     favoritesSlot.addEventListener('click', e => {
       const chip = e.target.closest('.fav-chip');
       if (!chip) return;
       this._pickSearchResult(chip.dataset);
     });
 
-    // Banner close
     bannerBtn?.addEventListener('click', () => {
       this._els.infoBanner.hidden = true;
       closeBanner();
@@ -348,10 +390,7 @@ export class UIController {
       const { latitude, longitude } = pos.coords;
       const loc = {
         name: `${latitude.toFixed(2)}°N, ${longitude.toFixed(2)}°E`,
-        country: '',
-        admin1: '',
-        latitude,
-        longitude,
+        country: '', admin1: '', latitude, longitude,
       };
       this._activateLocation(loc);
     } catch (err) {
@@ -368,13 +407,11 @@ export class UIController {
     this.currentLocation = loc;
     if (save) setActiveLocation(loc);
 
-    // Update header
     this._els.locationName.textContent = loc.name + (loc.country ? `, ${loc.country}` : '');
     this._updateFavIcon();
     this._renderFavoritesBar();
 
-    // Show skeleton cards
-    this._els.daysGrid.innerHTML = renderSkeletonCards();
+    this._els.daysGrid.innerHTML = renderArenaSkeletons();
     this._els.summarySlot.innerHTML = '';
     refreshIcons();
 
@@ -397,9 +434,11 @@ export class UIController {
   // ── Rendering ──────────────────────────────────────────────────────────────
 
   _renderDays(days) {
-    const cards = days.map((d, i) => d.error ? renderErrorCard(d, i) : renderDayCard(d, i)).join('');
-    this._els.daysGrid.innerHTML = cards;
-    this._els.summarySlot.innerHTML = renderSummary(days);
+    const rows = days.map((d, i) =>
+      d.error ? renderArenaErrorDay(d, i) : renderArenaDay(d, i)
+    ).join('');
+    this._els.daysGrid.innerHTML = rows;
+    this._els.summarySlot.innerHTML = renderArenaSummary(days);
     refreshIcons();
   }
 
@@ -433,7 +472,6 @@ export class UIController {
   // ── Errors ─────────────────────────────────────────────────────────────────
 
   _showError(msg) {
-    // Simple inline error toast at the top
     const el = document.createElement('div');
     el.className = 'toast toast--error';
     el.innerHTML = `${icon('alert-circle')} ${msg}`;

@@ -1,9 +1,11 @@
 /**
  * RetroCast – Comparison Engine
  * Compares historical forecast vs actual observed weather and produces accuracy metrics.
+ * Also generates statistical climate normals and random weather for arena comparisons.
  */
 
 import { fetchActualWeather, fetchHistoricalForecast } from './api-service.js';
+import { fetchClimateNormals } from './climate-service.js';
 import { formatDate, daysAgo } from './utils.js';
 import { LIMITS, getWeatherInfo } from './constants.js';
 
@@ -130,41 +132,102 @@ export function compareForecastToActual(forecast, actual) {
   return { temperature, precipitation, condition, overall };
 }
 
+// ── Random weather generator ─────────────────────────────────────────────────
+
+/** Deterministic LCG-based RNG seeded by a number. */
+function makeRng(seed) {
+  let s = (Math.abs(seed) | 1) >>> 0;
+  return () => {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
+    return s / 0xffffffff;
+  };
+}
+
+/** Convert a date string like "2025-02-26" to a numeric seed. */
+function dateSeed(dateStr) {
+  return dateStr.replace(/-/g, '').split('').reduce(
+    (acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0
+  );
+}
+
+// WMO codes spread across all common condition categories
+const RANDOM_CODES = [0, 1, 2, 3, 51, 61, 63, 65, 71, 80, 81, 95];
+
+/**
+ * Generate a plausible but completely random day of weather for a given date.
+ * Uses a deterministic seed so the same date always yields the same "random" result.
+ */
+export function generateRandomWeather(date) {
+  const rng = makeRng(dateSeed(date));
+
+  const tempMax  = parseFloat(((rng() * 52) - 12).toFixed(1));   // –12 to 40 °C
+  const tempMin  = parseFloat((tempMax - (rng() * 15 + 3)).toFixed(1)); // –3..18 below max
+  const hasPrecip = rng() > 0.55;
+  const precip   = hasPrecip ? parseFloat((rng() * 28).toFixed(1)) : 0;
+  const code     = RANDOM_CODES[Math.floor(rng() * RANDOM_CODES.length)];
+
+  return {
+    date,
+    weatherCode: code,
+    weather:     getWeatherInfo(code),
+    temperature: { max: tempMax, min: tempMin },
+    precipitation: { sum: precip, hours: 0, probability: null },
+  };
+}
+
 // ── Public: fetch + compare for N past days ──────────────────────────────────
 
 /**
  * For a given location, fetch the last `LIMITS.COMPARE_DAYS` days and return
- * an array of { date, dayLabel, forecast, actual, accuracy } objects.
+ * an array of objects with forecast, actual, climate-normal and random comparisons.
  *
- * Each entry may have `error` instead if that particular day failed.
+ * Shape per entry (success):
+ *   { date, daysAgo, forecast, actual, accuracy,
+ *     statistical, statAccuracy,
+ *     random, randAccuracy }
+ *
+ * On data error:
+ *   { date, daysAgo, error }
  */
 export async function fetchAndCompareAll(location) {
   const { latitude: lat, longitude: lon } = location;
   const days = LIMITS.COMPARE_DAYS;
 
-  // date range: 3 days ago … yesterday
   const startDate = daysAgo(days);
   const endDate   = daysAgo(1);
 
-  // Fetch both datasets in parallel – one call each covers all 3 days
-  const [actuals, forecasts] = await Promise.all([
+  // All three data sources in parallel
+  const [actuals, forecasts, climateNormals] = await Promise.all([
     fetchActualWeather(lat, lon, startDate, endDate),
     fetchHistoricalForecast(lat, lon, startDate, endDate),
+    fetchClimateNormals(lat, lon, startDate, endDate).catch(() => []),
   ]);
 
-  // Build a lookup by date string
   const actualMap   = Object.fromEntries(actuals.map(d => [d.date, d]));
   const forecastMap = Object.fromEntries(forecasts.map(d => [d.date, d]));
+  const climateMap  = Object.fromEntries(
+    climateNormals.filter(Boolean).map(d => [d.date, d])
+  );
 
   const results = [];
   for (let i = days; i >= 1; i--) {
-    const date = formatDate(daysAgo(i));
+    const date     = formatDate(daysAgo(i));
     const actual   = actualMap[date];
     const forecast = forecastMap[date];
 
     if (actual && forecast) {
-      const accuracy = compareForecastToActual(forecast, actual);
-      results.push({ date, daysAgo: i, forecast, actual, accuracy });
+      const accuracy     = compareForecastToActual(forecast, actual);
+      const statistical  = climateMap[date] ?? null;
+      const statAccuracy = statistical ? compareForecastToActual(statistical, actual) : null;
+      const random       = generateRandomWeather(date);
+      const randAccuracy = compareForecastToActual(random, actual);
+
+      results.push({
+        date, daysAgo: i,
+        forecast, actual, accuracy,
+        statistical, statAccuracy,
+        random, randAccuracy,
+      });
     } else {
       results.push({
         date,
