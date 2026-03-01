@@ -3,7 +3,7 @@
  * Compares historical forecast vs actual observed weather and produces accuracy metrics.
  */
 
-import { fetchActualWeather, fetchHistoricalForecast } from './api-service.js';
+import { fetchActualWeather, fetchHistoricalForecast, fetchMonthlyMedianWeather } from './api-service.js';
 import { formatDate, daysAgo } from './utils.js';
 import { LIMITS, getWeatherInfo } from './constants.js';
 
@@ -130,6 +130,84 @@ export function compareForecastToActual(forecast, actual) {
   return { temperature, precipitation, condition, overall };
 }
 
+// ── Median weather comparisons ────────────────────────────────────────────────
+
+/**
+ * Compare a single day's forecast to the monthly median.
+ * Simple comparison showing how forecast compares to statistical expectations.
+ */
+export function compareForecastToMedian(forecast, median) {
+  const forecastAvg = (forecast.temperature.max + forecast.temperature.min) / 2;
+  const medianAvg = median.temperature.avg;
+  const tempDiff = forecastAvg - medianAvg;
+  
+  const precipDiff = forecast.precipitation.sum - median.precipitation.sum;
+  const isRainier = forecast.precipitation.sum > median.precipitation.sum + 1;
+  const isDrier = forecast.precipitation.sum < median.precipitation.sum - 1;
+  
+  const fCat = forecast.weather.category;
+  const mCat = median.weather.category;
+  const categoryMatch = fCat === mCat;
+  
+  return {
+    temperature: {
+      diff: tempDiff,
+      warmer: tempDiff > 1,
+      cooler: tempDiff < -1,
+      typical: Math.abs(tempDiff) <= 1,
+    },
+    precipitation: {
+      diff: precipDiff,
+      rainier: isRainier,
+      drier: isDrier,
+      typical: !isRainier && !isDrier,
+    },
+    condition: {
+      match: categoryMatch,
+      forecastCategory: fCat,
+      medianCategory: mCat,
+    },
+  };
+}
+
+/**
+ * Compare actual observed weather to the monthly median.
+ * Shows how the actual weather compares to typical expectations.
+ */
+export function compareActualToMedian(actual, median) {
+  const actualAvg = (actual.temperature.max + actual.temperature.min) / 2;
+  const medianAvg = median.temperature.avg;
+  const tempDiff = actualAvg - medianAvg;
+  
+  const precipDiff = actual.precipitation.sum - median.precipitation.sum;
+  const isRainier = actual.precipitation.sum > median.precipitation.sum + 1;
+  const isDrier = actual.precipitation.sum < median.precipitation.sum - 1;
+  
+  const aCat = actual.weather.category;
+  const mCat = median.weather.category;
+  const categoryMatch = aCat === mCat;
+  
+  return {
+    temperature: {
+      diff: tempDiff,
+      warmer: tempDiff > 1,
+      cooler: tempDiff < -1,
+      typical: Math.abs(tempDiff) <= 1,
+    },
+    precipitation: {
+      diff: precipDiff,
+      rainier: isRainier,
+      drier: isDrier,
+      typical: !isRainier && !isDrier,
+    },
+    condition: {
+      match: categoryMatch,
+      actualCategory: aCat,
+      medianCategory: mCat,
+    },
+  };
+}
+
 // ── Public: fetch + compare for N past days ──────────────────────────────────
 
 /**
@@ -152,6 +230,10 @@ export async function fetchAndCompareAll(location) {
     fetchHistoricalForecast(lat, lon, startDate, endDate),
   ]);
 
+  // Fetch monthly median weather for the current month
+  const currentMonth = new Date().getMonth() + 1;
+  const monthlyMedian = await fetchMonthlyMedianWeather(lat, lon, currentMonth);
+
   // Build a lookup by date string
   const actualMap   = Object.fromEntries(actuals.map(d => [d.date, d]));
   const forecastMap = Object.fromEntries(forecasts.map(d => [d.date, d]));
@@ -164,7 +246,9 @@ export async function fetchAndCompareAll(location) {
 
     if (actual && forecast) {
       const accuracy = compareForecastToActual(forecast, actual);
-      results.push({ date, daysAgo: i, forecast, actual, accuracy });
+      const forecastVsMedian = monthlyMedian ? compareForecastToMedian(forecast, monthlyMedian) : null;
+      const actualVsMedian = monthlyMedian ? compareActualToMedian(actual, monthlyMedian) : null;
+      results.push({ date, daysAgo: i, forecast, actual, accuracy, monthlyMedian, forecastVsMedian, actualVsMedian });
     } else {
       results.push({
         date,

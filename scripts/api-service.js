@@ -143,3 +143,85 @@ export async function fetchCurrentForecast(lat, lon) {
   if (!data.daily?.time?.length) return null;
   return parseDayData(data.daily, 0, true);
 }
+
+/**
+ * Fetch historical weather data for a specific month across multiple years.
+ * Used to calculate monthly statistical medians.
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @param {number} month - Month number (1-12)
+ * @param {number} years - Number of years to fetch data for (default 10)
+ * @returns {Promise<Array>} Array of day objects
+ */
+export async function fetchHistoricalWeatherForMonth(lat, lon, month, years = 10) {
+  const today = new Date();
+  today.setDate(today.getDate() - 1);
+  
+  const startDate = `${today.getFullYear() - years}-${String(month).padStart(2, '0')}-01`;
+  const endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  
+  const url = buildURL(API.ARCHIVE, {
+    latitude:    lat,
+    longitude:   lon,
+    start_date:  startDate,
+    end_date:    endDate,
+    daily:       DAILY_PARAMS_ARCHIVE,
+    timezone:    'auto',
+  });
+  
+  const data = await retry(() => fetchJSON(url));
+  if (!data.daily?.time?.length) return [];
+  
+  return data.daily.time.map((_, i) => parseDayData(data.daily, i, false));
+}
+
+/**
+ * Calculate median statistics for a specific month.
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @param {number} month - Month number (1-12)
+ * @returns {Promise<Object>} Object containing median values for temp, precipitation, and weather codes
+ */
+export async function fetchMonthlyMedianWeather(lat, lon, month) {
+  const daysData = await fetchHistoricalWeatherForMonth(lat, lon, month, 10);
+  
+  if (!daysData.length) {
+    return null;
+  }
+  
+  const temps = daysData.map(d => (d.temperature.max + d.temperature.min) / 2);
+  const tempMaxs = daysData.map(d => d.temperature.max);
+  const tempMins = daysData.map(d => d.temperature.min);
+  const precip = daysData.map(d => d.precipitation.sum);
+  const precipHours = daysData.map(d => d.precipitation.hours);
+  
+  const sort = arr => [...arr].sort((a, b) => a - b);
+  const median = arr => {
+    const sorted = sort(arr);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  };
+  
+  const mostCommonWeatherCode = () => {
+    const counts = {};
+    daysData.forEach(d => {
+      counts[d.weatherCode] = (counts[d.weatherCode] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+  };
+  
+  return {
+    temperature: {
+      avg: median(temps),
+      max: median(tempMaxs),
+      min: median(tempMins),
+    },
+    precipitation: {
+      sum: median(precip),
+      hours: median(precipHours),
+    },
+    weatherCode: parseInt(mostCommonWeatherCode()),
+    weather: getWeatherInfo(parseInt(mostCommonWeatherCode())),
+    sampleSize: daysData.length,
+  };
+}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Median Weather Implementation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .loading { color: #666; }
+        .error { color: #d32f2f; }
+        .success { color: #1976d2; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Median Weather Feature Test</h1>
+    
+    <div class="section">
+        <h2>Test 1: Historical Weather API</h2>
+        <div id="test1" class="loading">Loading...</div>
+    </div>
+    
+    <div class="section">
+        <h2>Test 2: Monthly Median Calculation</h2>
+        <div id="test2" class="loading">Loading...</div>
+    </div>
+    
+    <div class="section">
+        <h2>Test 3: Full Feature Integration</h2>
+        <div id="test3" class="loading">Loading...</div>
+    </div>
+    
+    <script type="module">
+        import { fetchHistoricalWeatherForMonth, fetchMonthlyMedianWeather } from './scripts/api-service.js';
+        
+        function displayResult(elementId, result, isError = false) {
+            const el = document.getElementById(elementId);
+            if (isError) {
+                el.innerHTML = `<div class="error">${result}</div>`;
+            } else {
+                el.innerHTML = `<div class="success">${result}</div>`;
+            }
+        }
+        
+        async function runTests() {
+            const lat = 52.52;
+            const lon = 13.41;
+            const month = 3;
+            
+            try {
+                displayResult('test1', 'Fetching historical weather...');
+                const historicalData = await fetchHistoricalWeatherForMonth(lat, lon, month, 3);
+                displayResult('test1', `Success! Fetched ${historicalData.length} days of data.<br><pre>Sample day: ${JSON.stringify(historicalData[0], null, 2)}</pre>`);
+                
+                displayResult('test2', 'Calculating monthly median...');
+                const median = await fetchMonthlyMedianWeather(lat, lon, month);
+                displayResult('test2', `Success!<br><pre>${JSON.stringify(median, null, 2)}</pre>`);
+                
+                displayResult('test3', 'Testing full integration...');
+                if (median && historicalData.length > 0) {
+                    displayResult('test3', `Success! Integration verified.<br>
+                        - Historical data: ${historicalData.length} days<br>
+                        - Median temperature: ${median.temperature.avg.toFixed(1)}°C<br>
+                        - Median precipitation: ${median.precipitation.sum.toFixed(1)} mm<br>
+                        - Most common condition: ${median.weather.description}`);
+                } else {
+                    throw new Error('Integration failed - missing data');
+                }
+            } catch (error) {
+                displayResult('test3', `Error: ${error.message}`, true);
+                console.error(error);
+            }
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>

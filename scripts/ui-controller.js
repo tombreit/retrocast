@@ -57,7 +57,7 @@ function renderGauge(percentage, grade) {
 // ── Day card renderers ───────────────────────────────────────────────────────
 
 function renderDayCard(day, index) {
-  const { forecast: f, actual: a, accuracy: acc } = day;
+  const { forecast: f, actual: a, accuracy: acc, monthlyMedian: m, forecastVsMedian: fvm, actualVsMedian: avm } = day;
   const label = getRelativeDayLabel(day.daysAgo);
   const displayDate = formatDisplayDate(day.date);
 
@@ -84,6 +84,10 @@ function renderDayCard(day, index) {
               ? `${f.precipitation.probability}% chance`
               : `${f.precipitation.sum.toFixed(1)} mm`}
           </div>
+          ${m ? `
+          <div class="day-card__median-badge">
+            ${icon('trending')} vs median: ${fvm.temperature.warmer ? 'Warmer' : fvm.temperature.cooler ? 'Cooler' : 'Typical'}
+          </div>` : ''}
         </div>
 
         <!-- Gauge -->
@@ -103,6 +107,10 @@ function renderDayCard(day, index) {
           <div class="day-card__precip">
             ${icon('droplets')} ${a.precipitation.sum.toFixed(1)} mm
           </div>
+          ${m ? `
+          <div class="day-card__median-badge">
+            ${icon('trending')} vs median: ${avm.temperature.warmer ? 'Warmer' : avm.temperature.cooler ? 'Cooler' : 'Typical'}
+          </div>` : ''}
         </div>
       </div>
 
@@ -125,6 +133,23 @@ function renderDayCard(day, index) {
           </span>
         </div>
       </footer>
+      ${m ? `
+      <div class="day-card__median-info">
+        <div class="median-stat">
+          <span class="median-label">${icon('bar-chart')} Monthly median (10 years)</span>
+          <span class="median-value">
+            ${icon(m.weather.icon)} ${m.temperature.avg.toFixed(1)}° avg | ${m.precipitation.sum.toFixed(1)} mm rain
+          </span>
+        </div>
+        <div class="median-comparison">
+          <span class="median-badge ${fvm.condition.match ? 'match' : 'mismatch'}">
+            Forecast: ${fvm.condition.match ? icon('check') : icon('x')} vs median ${m.weather.description}
+          </span>
+          <span class="median-badge ${avm.condition.match ? 'match' : 'mismatch'}">
+            Actual: ${avm.condition.match ? icon('check') : icon('x')} vs median ${m.weather.description}
+          </span>
+        </div>
+      </div>` : ''}
     </article>`;
 }
 
