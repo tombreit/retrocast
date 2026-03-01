@@ -10,5 +10,10 @@
   "qwen-coder": {
     "name": "Qwen-Coder",
     "url": "qwen-coder"
+  },
+  "claude": {
+    "name": "Claude",
+    "url": "claude"
   }
+
 }
