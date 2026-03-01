@@ -4,7 +4,7 @@
  */
 
 import { searchLocations } from './api-service.js';
-import { fetchAndCompareAll } from './comparison-engine.js';
+import { fetchAndCompareAll, fetchMonthlyHistoricalData, calculateMonthlyMedians, compareForecastToActualWithMedian } from './comparison-engine.js';
 import {
   getActiveLocation, setActiveLocation,
   getFavorites, addFavorite, removeFavorite, isFavorite,
@@ -28,6 +28,13 @@ function refreshIcons() {
 function accuracyClass(rating) {
   const map = { Excellent: 'excellent', Good: 'good', Fair: 'fair', Poor: 'poor' };
   return map[rating] ?? 'poor';
+}
+
+function medianAccuracyClass(diffPercentage) {
+  if (diffPercentage <= 10) return 'excellent';
+  if (diffPercentage <= 25) return 'good';
+  if (diffPercentage <= 50) return 'fair';
+  return 'poor';
 }
 
 // ── SVG ring gauge ───────────────────────────────────────────────────────────
@@ -61,6 +68,9 @@ function renderDayCard(day, index) {
   const label = getRelativeDayLabel(day.daysAgo);
   const displayDate = formatDisplayDate(day.date);
 
+  // Check if we have median comparison data
+  const hasMedian = acc.medianComparison !== undefined;
+  
   return `
     <article class="day-card" style="animation-delay:${index * 100}ms">
       <header class="day-card__header">
@@ -125,6 +135,34 @@ function renderDayCard(day, index) {
           </span>
         </div>
       </footer>
+      
+      <!-- Statistical median comparison -->
+      ${hasMedian ? `
+      <div class="day-card__median">
+        <div class="day-card__col-title">${icon('chart-line')} Statistical Median</div>
+        <div class="day-card__median-content">
+          <div class="day-card__stat">
+            <span class="stat-label">Temp Diff</span>
+            <span class="stat-value acc-${medianAccuracyClass(acc.medianComparison.temperature.percentage)}">
+              ±${acc.medianComparison.temperature.diff.toFixed(1)}° (${acc.medianComparison.temperature.percentage.toFixed(0)}% of median)
+            </span>
+          </div>
+          <div class="day-card__stat">
+            <span class="stat-label">Precip Diff</span>
+            <span class="stat-value acc-${medianAccuracyClass(acc.medianComparison.precipitation.percentage)}">
+              ±${acc.medianComparison.precipitation.diff.toFixed(1)} mm (${acc.medianComparison.precipitation.percentage.toFixed(0)}% of median)
+            </span>
+          </div>
+          <div class="day-card__stat">
+            <span class="stat-label">Condition</span>
+            <span class="stat-value acc-${acc.medianComparison.condition.match ? 'excellent' : 'poor'}">
+              ${icon(acc.medianComparison.condition.match ? 'check' : 'x')} 
+              ${acc.medianComparison.condition.forecastCategory} vs ${acc.medianComparison.condition.medianCategory}
+            </span>
+          </div>
+        </div>
+      </div>
+      ` : ''}
     </article>`;
 }
 
@@ -380,7 +418,11 @@ export class UIController {
 
     try {
       const days = await fetchAndCompareAll(loc);
-      this._renderDays(days);
+      
+      // Now fetch and add statistical median data
+      const processedDays = await this._addStatisticalMedianData(days, loc);
+      
+      this._renderDays(processedDays);
     } catch (err) {
       console.error('Failed to load weather data', err);
       this._els.daysGrid.innerHTML = `
@@ -392,6 +434,37 @@ export class UIController {
       refreshIcons();
       document.getElementById('retryBtn')?.addEventListener('click', () => this._activateLocation(loc, false));
     }
+  }
+  
+  // ── Add statistical median data to compare results ───────────────────────────
+  
+  async _addStatisticalMedianData(days, location) {
+    // Determine current month for median calculations
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // getMonth() returns 0-11
+    
+    // Fetch historical data for the current month
+    const monthlyData = await fetchMonthlyHistoricalData(location.latitude, location.longitude, currentMonth);
+    
+    // Calculate monthly medians
+    const medianStats = calculateMonthlyMedians(monthlyData);
+    
+    // Add median comparison to each day
+    return days.map(day => {
+      if (day.error) return day;
+      
+      // Use the enhanced comparison function with median data
+      const enhancedAccuracy = compareForecastToActualWithMedian(
+        day.forecast, 
+        day.actual, 
+        medianStats
+      );
+      
+      return {
+        ...day,
+        accuracy: enhancedAccuracy
+      };
+    });
   }
 
   // ── Rendering ──────────────────────────────────────────────────────────────

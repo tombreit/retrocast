@@ -119,6 +119,80 @@ function calcOverall(temp, precip, cond) {
   };
 }
 
+// ── Statistical median helpers ───────────────────────────────────────────────
+
+function calculateMedian(values) {
+  if (values.length === 0) return 0;
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  } else {
+    return sorted[middle];
+  }
+}
+
+function calculateWeatherConditionMedian(dailyData) {
+  // Count frequency of each weather category
+  const categoryCount = {};
+  dailyData.forEach(day => {
+    const category = getWeatherInfo(day.weatherCode).category;
+    categoryCount[category] = (categoryCount[category] || 0) + 1;
+  });
+  
+  // Find category with highest frequency
+  let maxCount = 0;
+  let dominantCategory = 'unknown';
+  for (const [category, count] of Object.entries(categoryCount)) {
+    if (count > maxCount) {
+      maxCount = count;
+      dominantCategory = category;
+    }
+  }
+  
+  return dominantCategory;
+}
+
+// ── Public: compare one day with statistical median ────────────────────────────
+
+export function compareForecastToActualWithMedian(forecast, actual, medianStats) {
+  const temperature   = calcTemperature(forecast, actual);
+  const precipitation = calcPrecipitation(forecast, actual);
+  const condition     = calcCondition(forecast, actual);
+  const overall       = calcOverall(temperature, precipitation, condition);
+  
+  // Add statistical comparison
+  const temperatureDiff = Math.abs(forecast.temperature.max - medianStats.temperature);
+  const precipitationDiff = Math.abs(forecast.precipitation.sum - medianStats.precipitation);
+  
+  // Calculate how forecast compares to median (as percentage of median value)
+  const tempMedianPercentage = medianStats.temperature > 0 
+    ? (temperatureDiff / medianStats.temperature) * 100 
+    : 0;
+    
+  const precipMedianPercentage = medianStats.precipitation > 0 
+    ? (precipitationDiff / medianStats.precipitation) * 100 
+    : 0;
+  
+  return { 
+    temperature, 
+    precipitation, 
+    condition, 
+    overall,
+    medianComparison: {
+      temperature: { diff: temperatureDiff, percentage: tempMedianPercentage },
+      precipitation: { diff: precipitationDiff, percentage: precipMedianPercentage },
+      condition: {
+        forecastCategory: getWeatherInfo(forecast.weatherCode).category,
+        medianCategory: medianStats.weatherCategory,
+        match: getWeatherInfo(forecast.weatherCode).category === medianStats.weatherCategory
+      }
+    }
+  };
+}
+
 // ── Public: compare one day ──────────────────────────────────────────────────
 
 export function compareForecastToActual(forecast, actual) {
@@ -175,4 +249,65 @@ export async function fetchAndCompareAll(location) {
   }
 
   return results;
+}
+
+// ── Public: fetch historical data for a specific month to calculate medians ────
+
+/**
+ * Fetch historical weather data for a specific month across multiple years
+ * to compute statistical medians.
+ */
+export async function fetchMonthlyHistoricalData(lat, lon, month) {
+  // We'll fetch data for a range of years (2010-2023) for the given month
+  const years = [];
+  for (let year = 2010; year <= 2023; year++) {
+    years.push(year);
+  }
+  
+  const allData = [];
+  
+  // Fetch data for each year in the range
+  for (const year of years) {
+    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+    // Get end date - last day of the month
+    const endDate = `${year}-${month.toString().padStart(2, '0')}-${getDaysInMonth(month, year)}`;
+    
+    try {
+      const yearData = await fetchActualWeather(lat, lon, startDate, endDate);
+      allData.push(...yearData);
+    } catch (error) {
+      console.warn(`Could not fetch data for ${year}, skipping`);
+      // Continue with other years
+    }
+  }
+  
+  return allData;
+}
+
+// Helper function to get number of days in a month
+function getDaysInMonth(month, year) {
+  return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Calculate statistical medians from historical data for a specific month
+ */
+export function calculateMonthlyMedians(dailyData) {
+  if (dailyData.length === 0) {
+    return {
+      temperature: 0,
+      precipitation: 0,
+      weatherCategory: 'unknown'
+    };
+  }
+  
+  // Extract temperature and precipitation data
+  const temperatures = dailyData.map(d => d.temperature.max);
+  const precipitations = dailyData.map(d => d.precipitation.sum);
+  
+  return {
+    temperature: calculateMedian(temperatures),
+    precipitation: calculateMedian(precipitations),
+    weatherCategory: calculateWeatherConditionMedian(dailyData)
+  };
 }

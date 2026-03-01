@@ -514,6 +514,33 @@ img, svg { display: block; max-width: 100%; }
 .acc-fair      { color: var(--c-fair); }
 .acc-poor      { color: var(--c-poor); }
 
+/* Median comparison */
+.day-card__median {
+  padding: 12px 18px 16px;
+  border-top: 1px solid var(--c-border);
+  background: var(--c-surface-solid);
+}
+
+.day-card__median-content {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 8px;
+  background: var(--c-border);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+}
+
+.day-card__stat--median {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  background: var(--c-surface-solid);
+  font-size: .78rem;
+}
+
 /* ── Error / empty card ────────────────────────────────────────────────────── */
 .day-card--error { opacity: .6; }
 .day-card__empty {
