@@ -109,8 +109,8 @@ The entry menu is a minimal landing page that lists all configured branches. It 
 ### File: `.github/workflows/multi-branch-deploy.yml`
 
 **Triggers:**
-- Automatic: On push to any branch `[main, glm47, qwen-coder]`
-- Manual: Via GitHub Actions UI (workflow_dispatch)
+- Automatic: On push to main branch only
+- Manual: Via GitHub Actions UI (workflow_dispatch) - use this to redeploy after changes to glm47 or qwen-coder
 
 **Workflow Steps:**
 
@@ -160,28 +160,19 @@ The original `.github/workflows/deploy.yml` is kept as a backup. It's not active
 
 ### Automatic Deployment
 
-When you push to any configured branch:
+When you push to the **main branch** only:
 
 1. GitHub detects the push event
 2. Triggers `multi-branch-deploy.yml` workflow
-3. Workflow fetches and processes all branches
+3. Workflow fetches and processes all branches (main, glm47, qwen-coder)
 4. Updates `gh-pages` branch
 5. GitHub Pages serves the new deployment
 
-**Example:**
-```bash
-# Make changes to glm47 branch
-git checkout glm47
-# ... edit files ...
-git commit -am "Add new feature"
-git push
-
-# Workflow automatically triggers and deploys all branches
-```
+**Note:** Pushes to glm47 or qwen-coder do NOT automatically trigger deployment. Use manual deployment to deploy changes from those branches.
 
 ### Manual Deployment
 
-You can manually trigger the workflow from GitHub:
+Use manual deployment to deploy changes made to glm47 or qwen-coder branches, or to force a redeploy.
 
 1. Go to: https://github.com/tombreit/retrocast/actions
 2. Select "Multi-Branch Deploy to GitHub Pages"
@@ -280,11 +271,12 @@ After successful deployment:
 
 **Symptoms:** Workflow doesn't run after pushing
 
-**Solutions:**
-1. Verify branch is in trigger list:
-   ```yaml
-   branches: [main, glm47, qwen-coder]
-   ```
+**Solutions:** 
+1. **Note:** Automatic trigger only works for the `main` branch. Pushes to glm47 or qwen-coder require manual deployment.
+2. To deploy changes from glm47 or qwen-coder, use manual trigger:
+   - Go to: https://github.com/tombreit/retrocast/actions
+   - Select "Multi-Branch Deploy to GitHub Pages"
+   - Click "Run workflow" → "Run workflow"
 
 2. Check workflow file syntax:
    - Look for syntax errors (quotes, indentation)

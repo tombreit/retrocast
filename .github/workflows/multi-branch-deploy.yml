@@ -2,7 +2,7 @@ name: Multi-Branch Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, glm47, qwen-coder]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
