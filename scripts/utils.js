@@ -3,7 +3,7 @@
  * Only functions that are actually used by other modules.
  */
 
-import { LIMITS } from './constants.js';
+import { LIMITS } from "./constants.js";
 
 /**
  * Format a Date to YYYY-MM-DD (Open-Meteo's expected format).
@@ -11,8 +11,8 @@ import { LIMITS } from './constants.js';
 export function formatDate(date) {
   const d = date instanceof Date ? date : new Date(date);
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -20,11 +20,11 @@ export function formatDate(date) {
  * Human-friendly display date, e.g. "Thu, Feb 26".
  */
 export function formatDisplayDate(date) {
-  const d = date instanceof Date ? date : new Date(date + 'T00:00:00');
-  return d.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
+  const d = date instanceof Date ? date : new Date(date + "T00:00:00");
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
   });
 }
 
@@ -33,7 +33,7 @@ export function formatDisplayDate(date) {
  * 1 → "Yesterday", 2 → "2 days ago", etc.
  */
 export function getRelativeDayLabel(daysAgo) {
-  if (daysAgo === 1) return 'Yesterday';
+  if (daysAgo === 1) return "Yesterday";
   return `${daysAgo} days ago`;
 }
 
@@ -51,10 +51,13 @@ export function debounce(fn, ms = 300) {
 /**
  * Retry an async function with exponential backoff.
  */
-export async function retry(fn, {
-  attempts = LIMITS.RETRY_ATTEMPTS,
-  baseDelay = LIMITS.RETRY_BASE_DELAY_MS,
-} = {}) {
+export async function retry(
+  fn,
+  {
+    attempts = LIMITS.RETRY_ATTEMPTS,
+    baseDelay = LIMITS.RETRY_BASE_DELAY_MS,
+  } = {},
+) {
   let lastError;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -62,7 +65,7 @@ export async function retry(fn, {
     } catch (err) {
       lastError = err;
       if (i < attempts - 1) {
-        await new Promise(r => setTimeout(r, baseDelay * 2 ** i));
+        await new Promise((r) => setTimeout(r, baseDelay * 2 ** i));
       }
     }
   }

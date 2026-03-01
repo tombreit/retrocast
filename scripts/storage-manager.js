@@ -3,7 +3,7 @@
  * localStorage wrapper for active location, favorites, and forecast cache.
  */
 
-import { STORAGE_KEYS, LIMITS } from './constants.js';
+import { STORAGE_KEYS, LIMITS } from "./constants.js";
 
 // ── Active Location ──────────────────────────────────────────────────────────
 
@@ -11,7 +11,9 @@ export function getActiveLocation() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_LOCATION);
     return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export function setActiveLocation(loc) {
@@ -24,7 +26,9 @@ export function getFavorites() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES);
     return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 
 function saveFavorites(favs) {
@@ -36,17 +40,18 @@ function saveFavorites(favs) {
  */
 export function addFavorite(loc) {
   const favs = getFavorites();
-  const exists = favs.some(f =>
-    Math.abs(f.latitude - loc.latitude) < 0.01 &&
-    Math.abs(f.longitude - loc.longitude) < 0.01
+  const exists = favs.some(
+    (f) =>
+      Math.abs(f.latitude - loc.latitude) < 0.01 &&
+      Math.abs(f.longitude - loc.longitude) < 0.01,
   );
   if (exists) return false;
   if (favs.length >= LIMITS.MAX_FAVORITES) return false;
   favs.push({
-    name:      loc.name,
-    country:   loc.country ?? '',
-    admin1:    loc.admin1 ?? '',
-    latitude:  loc.latitude,
+    name: loc.name,
+    country: loc.country ?? "",
+    admin1: loc.admin1 ?? "",
+    latitude: loc.latitude,
     longitude: loc.longitude,
   });
   saveFavorites(favs);
@@ -57,8 +62,11 @@ export function addFavorite(loc) {
  * Remove a favorite by coordinates.
  */
 export function removeFavorite(lat, lon) {
-  const favs = getFavorites().filter(f =>
-    !(Math.abs(f.latitude - lat) < 0.01 && Math.abs(f.longitude - lon) < 0.01)
+  const favs = getFavorites().filter(
+    (f) =>
+      !(
+        Math.abs(f.latitude - lat) < 0.01 && Math.abs(f.longitude - lon) < 0.01
+      ),
   );
   saveFavorites(favs);
 }
@@ -67,17 +75,18 @@ export function removeFavorite(lat, lon) {
  * Check if a location is in favorites.
  */
 export function isFavorite(lat, lon) {
-  return getFavorites().some(f =>
-    Math.abs(f.latitude - lat) < 0.01 && Math.abs(f.longitude - lon) < 0.01
+  return getFavorites().some(
+    (f) =>
+      Math.abs(f.latitude - lat) < 0.01 && Math.abs(f.longitude - lon) < 0.01,
   );
 }
 
 // ── Banner State ─────────────────────────────────────────────────────────────
 
 export function isBannerClosed() {
-  return localStorage.getItem(STORAGE_KEYS.BANNER_CLOSED) === '1';
+  return localStorage.getItem(STORAGE_KEYS.BANNER_CLOSED) === "1";
 }
 
 export function closeBanner() {
-  localStorage.setItem(STORAGE_KEYS.BANNER_CLOSED, '1');
+  localStorage.setItem(STORAGE_KEYS.BANNER_CLOSED, "1");
 }

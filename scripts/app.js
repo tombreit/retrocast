@@ -3,9 +3,9 @@
  * Bootstraps the UI controller once the DOM is ready.
  */
 
-import { UIController } from './ui-controller.js';
+import { UIController } from "./ui-controller.js";
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   // Initialize Lucide icons already present in the HTML
   if (window.lucide) window.lucide.createIcons();
 

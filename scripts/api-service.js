@@ -3,27 +3,27 @@
  * Wraps Open-Meteo endpoints: forecast, archive, historical-forecast, geocoding.
  */
 
-import { API, LIMITS, getWeatherInfo } from './constants.js';
-import { formatDate, retry } from './utils.js';
+import { API, LIMITS, getWeatherInfo } from "./constants.js";
+import { formatDate, retry } from "./utils.js";
 
 // Shared daily parameters requested from Open-Meteo
 const DAILY_PARAMS = [
-  'weather_code',
-  'temperature_2m_max',
-  'temperature_2m_min',
-  'precipitation_sum',
-  'precipitation_hours',
-  'precipitation_probability_max',
-].join(',');
+  "weather_code",
+  "temperature_2m_max",
+  "temperature_2m_min",
+  "precipitation_sum",
+  "precipitation_hours",
+  "precipitation_probability_max",
+].join(",");
 
 // For archive API (no probability field available)
 const DAILY_PARAMS_ARCHIVE = [
-  'weather_code',
-  'temperature_2m_max',
-  'temperature_2m_min',
-  'precipitation_sum',
-  'precipitation_hours',
-].join(',');
+  "weather_code",
+  "temperature_2m_max",
+  "temperature_2m_min",
+  "precipitation_sum",
+  "precipitation_hours",
+].join(",");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,16 +51,16 @@ async function fetchJSON(url) {
  */
 function parseDayData(daily, idx, hasProbability = false) {
   return {
-    date:        daily.time[idx],
+    date: daily.time[idx],
     weatherCode: daily.weather_code[idx],
-    weather:     getWeatherInfo(daily.weather_code[idx]),
+    weather: getWeatherInfo(daily.weather_code[idx]),
     temperature: {
       max: daily.temperature_2m_max[idx],
       min: daily.temperature_2m_min[idx],
     },
     precipitation: {
-      sum:         daily.precipitation_sum[idx]   ?? 0,
-      hours:       daily.precipitation_hours?.[idx] ?? 0,
+      sum: daily.precipitation_sum[idx] ?? 0,
+      hours: daily.precipitation_hours?.[idx] ?? 0,
       probability: hasProbability
         ? (daily.precipitation_probability_max?.[idx] ?? null)
         : null,
@@ -75,18 +75,18 @@ function parseDayData(daily, idx, hasProbability = false) {
  */
 export async function searchLocations(query) {
   const url = buildURL(API.GEOCODING, {
-    name:     query,
-    count:    LIMITS.GEOCODING_RESULTS,
-    language: 'en',
-    format:   'json',
+    name: query,
+    count: LIMITS.GEOCODING_RESULTS,
+    language: "en",
+    format: "json",
   });
   const data = await retry(() => fetchJSON(url));
   if (!data.results?.length) return [];
-  return data.results.map(r => ({
-    name:      r.name,
-    country:   r.country ?? '',
-    admin1:    r.admin1 ?? '',
-    latitude:  r.latitude,
+  return data.results.map((r) => ({
+    name: r.name,
+    country: r.country ?? "",
+    admin1: r.admin1 ?? "",
+    latitude: r.latitude,
     longitude: r.longitude,
   }));
 }
@@ -97,12 +97,12 @@ export async function searchLocations(query) {
  */
 export async function fetchActualWeather(lat, lon, startDate, endDate) {
   const url = buildURL(API.ARCHIVE, {
-    latitude:    lat,
-    longitude:   lon,
-    start_date:  formatDate(startDate),
-    end_date:    formatDate(endDate),
-    daily:       DAILY_PARAMS_ARCHIVE,
-    timezone:    'auto',
+    latitude: lat,
+    longitude: lon,
+    start_date: formatDate(startDate),
+    end_date: formatDate(endDate),
+    daily: DAILY_PARAMS_ARCHIVE,
+    timezone: "auto",
   });
   const data = await retry(() => fetchJSON(url));
   if (!data.daily?.time?.length) return [];
@@ -116,12 +116,12 @@ export async function fetchActualWeather(lat, lon, startDate, endDate) {
  */
 export async function fetchHistoricalForecast(lat, lon, startDate, endDate) {
   const url = buildURL(API.HISTORICAL_FORECAST, {
-    latitude:    lat,
-    longitude:   lon,
-    start_date:  formatDate(startDate),
-    end_date:    formatDate(endDate),
-    daily:       DAILY_PARAMS,
-    timezone:    'auto',
+    latitude: lat,
+    longitude: lon,
+    start_date: formatDate(startDate),
+    end_date: formatDate(endDate),
+    daily: DAILY_PARAMS,
+    timezone: "auto",
   });
   const data = await retry(() => fetchJSON(url));
   if (!data.daily?.time?.length) return [];
@@ -133,10 +133,10 @@ export async function fetchHistoricalForecast(lat, lon, startDate, endDate) {
  */
 export async function fetchCurrentForecast(lat, lon) {
   const url = buildURL(API.FORECAST, {
-    latitude:    lat,
-    longitude:   lon,
-    daily:       DAILY_PARAMS,
-    timezone:    'auto',
+    latitude: lat,
+    longitude: lon,
+    daily: DAILY_PARAMS,
+    timezone: "auto",
     forecast_days: 1,
   });
   const data = await retry(() => fetchJSON(url));
@@ -153,25 +153,30 @@ export async function fetchCurrentForecast(lat, lon) {
  * @param {number} years - Number of years to fetch data for (default 10)
  * @returns {Promise<Array>} Array of day objects
  */
-export async function fetchHistoricalWeatherForMonth(lat, lon, month, years = 10) {
+export async function fetchHistoricalWeatherForMonth(
+  lat,
+  lon,
+  month,
+  years = 10,
+) {
   const today = new Date();
   today.setDate(today.getDate() - 1);
-  
-  const startDate = `${today.getFullYear() - years}-${String(month).padStart(2, '0')}-01`;
-  const endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  
+
+  const startDate = `${today.getFullYear() - years}-${String(month).padStart(2, "0")}-01`;
+  const endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
   const url = buildURL(API.ARCHIVE, {
-    latitude:    lat,
-    longitude:   lon,
-    start_date:  startDate,
-    end_date:    endDate,
-    daily:       DAILY_PARAMS_ARCHIVE,
-    timezone:    'auto',
+    latitude: lat,
+    longitude: lon,
+    start_date: startDate,
+    end_date: endDate,
+    daily: DAILY_PARAMS_ARCHIVE,
+    timezone: "auto",
   });
-  
+
   const data = await retry(() => fetchJSON(url));
   if (!data.daily?.time?.length) return [];
-  
+
   return data.daily.time.map((_, i) => parseDayData(data.daily, i, false));
 }
 
@@ -184,32 +189,36 @@ export async function fetchHistoricalWeatherForMonth(lat, lon, month, years = 10
  */
 export async function fetchMonthlyMedianWeather(lat, lon, month) {
   const daysData = await fetchHistoricalWeatherForMonth(lat, lon, month, 10);
-  
+
   if (!daysData.length) {
     return null;
   }
-  
-  const temps = daysData.map(d => (d.temperature.max + d.temperature.min) / 2);
-  const tempMaxs = daysData.map(d => d.temperature.max);
-  const tempMins = daysData.map(d => d.temperature.min);
-  const precip = daysData.map(d => d.precipitation.sum);
-  const precipHours = daysData.map(d => d.precipitation.hours);
-  
-  const sort = arr => [...arr].sort((a, b) => a - b);
-  const median = arr => {
+
+  const temps = daysData.map(
+    (d) => (d.temperature.max + d.temperature.min) / 2,
+  );
+  const tempMaxs = daysData.map((d) => d.temperature.max);
+  const tempMins = daysData.map((d) => d.temperature.min);
+  const precip = daysData.map((d) => d.precipitation.sum);
+  const precipHours = daysData.map((d) => d.precipitation.hours);
+
+  const sort = (arr) => [...arr].sort((a, b) => a - b);
+  const median = (arr) => {
     const sorted = sort(arr);
     const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    return sorted.length % 2 !== 0
+      ? sorted[mid]
+      : (sorted[mid - 1] + sorted[mid]) / 2;
   };
-  
+
   const mostCommonWeatherCode = () => {
     const counts = {};
-    daysData.forEach(d => {
+    daysData.forEach((d) => {
       counts[d.weatherCode] = (counts[d.weatherCode] || 0) + 1;
     });
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
   };
-  
+
   return {
     temperature: {
       avg: median(temps),
