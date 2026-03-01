@@ -1,0 +1,14 @@
+{
+  "main": {
+    "name": "Main",
+    "url": "main"
+  },
+  "glm47": {
+    "name": "GLM-4.7",
+    "url": "glm47"
+  },
+  "qwen-coder": {
+    "name": "Qwen-Coder",
+    "url": "qwen-coder"
+  }
+}

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RetroCast - Select Version</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="main/styles/main.css">
+  <style>
+    .branch-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .branch-card {
+      background: var(--c-surface);
+      border-radius: var(--r-md);
+      padding: 40px 20px;
+      text-align: center;
+      text-decoration: none;
+      color: var(--c-text);
+      border: 2px solid var(--c-border);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .branch-card:hover {
+      border-color: var(--c-accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    .branch-card h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0 0 10px 0;
+    }
+    .branch-card p {
+      color: var(--c-text-dim);
+      margin: 0;
+      font-size: 0.9rem;
+    }
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .hero p {
+      color: var(--c-text-dim);
+      font-size: 1.1rem;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header" style="justify-content: center;">
+      <a class="header__brand" href="/">
+        <i data-lucide="cloud-sun" class="brand-icon"></i>
+        <span class="brand-name">RetroCast</span>
+      </a>
+    </header>
+
+    <main class="main">
+      <div class="hero">
+        <h1>Choose Your Version</h1>
+        <p>Select a branch to launch</p>
+      </div>
+
+      <div class="branch-cards" id="branchCards">
+        <!-- Cards will be injected by JavaScript -->
+      </div>
+    </main>
+
+    <footer class="footer" style="text-align: center;">
+      <p>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js" defer></script>
+  <script type="module">
+    async function loadBranches() {
+      const response = await fetch('branches.json');
+      const branches = await response.json();
+      
+      const container = document.getElementById('branchCards');
+
+      Object.entries(branches).forEach(([key, branch]) => {
+        const card = document.createElement('a');
+        card.className = 'branch-card';
+        card.href = `${branch.url}/`;
+        
+        card.innerHTML = `
+          <h2>${branch.name}</h2>
+          <p>Launch →</p>
+        `;
+        
+        container.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    loadBranches();
+  </script>
+</body>
+</html>

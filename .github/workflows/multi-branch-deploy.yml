@@ -1,0 +1,124 @@
+name: Multi-Branch Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, glm47, qwen-coder]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout repository with all branches
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Step 2: Read branches.json configuration
+      - name: Read branches.json
+        id: branches
+        run: |
+          BRANCHES=$(jq -r 'to_entries | .[] | .key' branches.json | tr '\n' ',')
+          echo "list=$BRANCHES" >> $GITHUB_OUTPUT
+          echo "Branches to deploy: $BRANCHES"
+        shell: bash
+
+      # Step 3: Validate branches exist
+      - name: Validate branches exist
+        run: |
+          for branch in $(echo '${{ steps.branches.outputs.list }}' | tr ',' ' '); do
+            if ! git rev-parse --verify origin/$branch >/dev/null 2>&1; then
+              echo "Error: Branch '$branch' does not exist"
+              exit 1
+            fi
+            echo "Branch '$branch' confirmed to exist"
+          done
+        shell: bash
+
+      # Step 4: Build deployment structure
+      - name: Build deployment
+        run: |
+          set -e  # Exit on any error
+          mkdir -p _site
+          
+          echo "Building deployment for branches: ${{ steps.branches.outputs.list }}"
+          
+          # Process each branch from branches.json
+          for branch in $(echo '${{ steps.branches.outputs.list }}' | tr ',' ' '); do
+            echo "Processing branch: $branch"
+            
+            # Checkout the specific branch
+            git checkout $branch || {
+              echo "Error: Failed to checkout branch '$branch'"
+              exit 1
+            }
+            
+            # Create subdirectory in _site
+            mkdir -p "_site/$branch"
+            
+            # Copy all files to subdirectory
+            cp -r index.html styles scripts "_site/$branch/" || {
+              echo "Error: Failed to copy files for branch '$branch'"
+              exit 1
+            }
+            
+            echo "Branch '$branch' copied successfully to _site/$branch"
+          done
+          
+          # Go back to main to get config files
+          git checkout main || {
+            echo "Error: Failed to checkout main branch"
+            exit 1
+          }
+          
+          # Copy branches.json and entry menu to root
+          cp branches.json _site/ || {
+            echo "Error: Failed to copy branches.json"
+            exit 1
+          }
+          
+          cp entry-menu.html _site/index.html || {
+            echo "Error: Failed to copy entry-menu.html"
+            exit 1
+          }
+          
+          echo "Deployment structure ready"
+          echo "Contents of _site:"
+          ls -la _site/
+        shell: bash
+
+      # Step 5: Setup Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Step 6: Upload artifact
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      # Step 7: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # Step 8: Cleanup (always runs, even on failure)
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf _site
+          git checkout main
+        shell: bash
